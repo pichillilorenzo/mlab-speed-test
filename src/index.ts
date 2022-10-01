@@ -1,6 +1,10 @@
-import * as puppeteer from "puppeteer";
-import {Browser} from "puppeteer";
 import EventEmitter from "events";
+import {Worker} from "worker_threads";
+import path from "path";
+
+export interface MLabSpeedTestServerDiscovery {
+  loadbalancer: URL;
+}
 
 export interface MLabSpeedTestServerInfo {
   machine: string;
@@ -112,12 +116,12 @@ export interface MLabSpeedTestMeasurementServer {
 }
 
 export interface MLabSpeedTestComplete {
-  LastClientMeasurement: {
+  LastClientMeasurement?: {
     ElapsedTime: number;
     NumBytes: number;
     MeanClientMbps: number;
   };
-  LastServerMeasurement: {
+  LastServerMeasurement?: {
     ConnectionInfo: MLabSpeedTestConnectionInfo;
     BBRInfo: MLabSpeedTestBBRInfo;
     TCPInfo: MLabSpeedTestTCPInfo;
@@ -130,135 +134,76 @@ export interface MLabSpeedTestUploadStart {
 }
 
 export declare interface MLabSpeedTest {
+  on(event: 'server-discovery', listener: (data: MLabSpeedTestServerDiscovery) => void): this;
+
   on(event: 'server-chosen', listener: (serverInfo: MLabSpeedTestServerInfo) => void): this;
+
   on(event: 'download-start', listener: (data: MLabSpeedTestDownloadStart) => void): this;
+
   on(event: 'download-measurement', listener: (data: MLabSpeedTestMeasurement) => void): this;
+
   on(event: 'download-complete', listener: (data: MLabSpeedTestComplete) => void): this;
+
   on(event: 'upload-start', listener: (data: MLabSpeedTestUploadStart) => void): this;
+
   on(event: 'upload-measurement', listener: (data: MLabSpeedTestMeasurement) => void): this;
+
   on(event: 'upload-complete', listener: (data: MLabSpeedTestComplete) => void): this;
-  on(event: 'complete', listener: () => void): this;
+
+  on(event: 'complete', listener: (exitCode: number) => void): this;
+
+  on(event: 'error', listener: (err: Error) => void): this;
 }
 
+/**
+ * M-Lab's Speed Test command.
+ */
 export class MLabSpeedTest extends EventEmitter {
-  private browser?: Browser;
   private _running = false;
+  private _worker?: Worker;
 
   constructor() {
     super();
   }
 
+  /**
+   * Checks if M-Lab's Speed Test is running.
+   */
   get running() {
     return this._running;
   };
 
-  async init() {
-    this._running = false;
-    this.browser = await puppeteer.launch();
-    const page = await this.browser.newPage();
-    await page.exposeFunction('onServerChosen', (serverInfo: MLabSpeedTestServerInfo) => {
-      this.emit('server-chosen', serverInfo);
-    });
-    await page.exposeFunction('onDownloadStart', (data: MLabSpeedTestDownloadStart) => {
-      this.emit('download-start', data);
-    });
-    await page.exposeFunction('onDownloadMeasurement', (data: MLabSpeedTestMeasurement) => {
-      this.emit('download-measurement', data);
-    });
-    await page.exposeFunction('onDownloadComplete', (data: MLabSpeedTestComplete) => {
-      this.emit('download-complete', data);
-    });
-    await page.exposeFunction('onUploadStart', (data: MLabSpeedTestUploadStart) => {
-      this.emit('upload-start', data);
-    });
-    await page.exposeFunction('onUploadMeasurement', (data: MLabSpeedTestMeasurement) => {
-      this.emit('upload-measurement', data);
-    });
-    await page.exposeFunction('onUploadComplete', (data: MLabSpeedTestComplete) => {
-      this.emit('upload-complete', data);
-    });
-    await page.exposeFunction('onComplete', () => {
-      this.emit('complete');
-    });
-    await page.goto('https://speed.measurementlab.net/', {
-      waitUntil: 'networkidle2',
-    });
-  }
-
-  run = async () => {
+  /**
+   * Starts the M-Lab's Speed Test.
+   *
+   * @return {number} Zero on success, non-zero error code on failure and `undefined` if the speed test is already running.
+   */
+  async run(): Promise<number | undefined> {
     if (this._running) return;
-    const browser = this.browser;
-    if (!browser) return;
-    const page = (await browser.pages())[1];
-    if (!page) return;
     this._running = true;
 
-    await page.evaluate(async () => {
-      // @ts-ignore
-      await window.ndt7.test(
-        {
-          userAcceptedDataPolicy: true,
-          uploadworkerfile: "/libraries/ndt7-upload-worker.min.js",
-          downloadworkerfile: "/libraries/ndt7-download-worker.min.js"
-        },
-        {
-          serverChosen: (server: MLabSpeedTestServerInfo) => {
-            // @ts-ignore
-            window.onServerChosen(server);
-          },
-          downloadStart: (data: MLabSpeedTestDownloadStart) => {
-            // @ts-ignore
-            window.onDownloadStart(data);
-          },
-          downloadMeasurement: (data: MLabSpeedTestMeasurement) => {
-            // @ts-ignore
-            window.onDownloadMeasurement(data);
-          },
-          downloadComplete: (data: MLabSpeedTestComplete) => {
-            // @ts-ignore
-            window.onDownloadComplete(data);
-          },
-          uploadStart: (data: MLabSpeedTestUploadStart) => {
-            // @ts-ignore
-            window.onUploadStart(data);
-          },
-          uploadMeasurement: (data: MLabSpeedTestMeasurement) => {
-            // @ts-ignore
-            window.onUploadMeasurement(data);
-          },
-          uploadComplete: (data: MLabSpeedTestComplete) => {
-            // @ts-ignore
-            window.onUploadComplete(data);
-          },
-        },
-      );
-
-      // @ts-ignore
-      window.onComplete();
-    }).catch(_ => {
-
-    });
-
-    this._running = false;
-  }
-
-  async stop() {
-    const browser = this.browser;
-    if (!browser) return;
-    const page = (await browser.pages())[1];
-    if (page) {
-      await page.reload({
-        waitUntil: 'networkidle2'
+    // Because ndt7.test() returns a Promise<number> and it cannot be stopped,
+    // I wrap it in a Worker, so it could be stopped using the '.terminate()' Worker method.
+    this._worker = new Worker(path.join(__dirname, 'worker.js'));
+    return new Promise<number | undefined>((resolve, _) => {
+      this._worker?.on('message', (values: [string, ...any]) => {
+        const event = values[0];
+        this.emit(event, ...values.slice(1));
+        if (event === 'complete') {
+          this._running = false;
+          resolve(values[1] as number);
+          return;
+        }
       });
-    }
-    this._running = false;
+    });
   }
 
-  async close() {
-    const browser = this.browser;
-    if (!browser) return;
-    await browser.close();
-    this.browser = undefined;
+  /**
+   * Stops the M-Lab's Speed Test.
+   */
+  async stop() {
+    await this._worker?.terminate();
+    this._worker = undefined;
     this._running = false;
   }
 }

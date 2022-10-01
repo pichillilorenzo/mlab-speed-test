@@ -52,20 +52,23 @@
     "README.md"
   ],
   "scripts": {
-    "start": "ts-node src/cli.ts",
-    "build": "tsc --build && typedoc --out docs src/index.ts",
+    "start": "npm run build && lib/cli.js -ap",
+    "start:json": "npm run build && lib/cli.js -ap --json",
+    "build": "tsc --build",
+    "build:doc": "typedoc --out docs src/index.ts",
     "clean": "tsc --build --clean",
     "watch": "tsc --watch",
     "postbuild": "minimize-js ./lib",
     "test": "rimraf ./coverage && jest --coverage",
     "coverage": "coveralls < coverage/lcov.info",
-    "prepare": "npm run build && npm run test && npm run coverage"
+    "prepare": "npm run build && npm run build:doc && npm run test && npm run coverage"
   },
   "dependencies": {
+    "@m-lab/ndt7": "^0.0.6",
     "commander": "^8.3.0",
     "ink": "^3.2.0",
+    "ink-link": "^2.0.0",
     "ink-spinner": "^4.0.3",
-    "puppeteer": "^18.0.5",
     "react": "^17.0.2",
     "tslib": "^2.3.1"
   },

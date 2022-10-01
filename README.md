@@ -40,8 +40,19 @@ import {MLabSpeedTest} from 'mlab-speed-test';
 const {MLabSpeedTest} = require('mlab-speed-test');
 
 const speedTest = new MLabSpeedTest();
-await speedTest.init();
-await speedTest.run();
+speedTest.on('server-chosen', (serverInfo) => {
+   console.log(serverInfo.location);
+});
+speedTest.on('download-complete', downloadData => {
+   const downloadSpeed = downloadData.LastClientMeasurement ? downloadData.LastClientMeasurement.MeanClientMbps.toFixed(2) : '0';
+   console.log(downloadSpeed + 'Mb/s');
+});
+speedTest.on('upload-complete', uploadData => {
+   const uploadSpeed = uploadData.LastServerMeasurement ?
+           (uploadData.LastServerMeasurement.TCPInfo.BytesReceived / uploadData.LastServerMeasurement.TCPInfo.ElapsedTime * 8).toFixed(2) : '0';
+   console.log(uploadSpeed + 'Mb/s');
+});
+const exitCode = await speedTest.run();
 ```
 
 ## CLI Usage
@@ -50,12 +61,15 @@ await speedTest.run();
 Usage: mlab-speed-test [options]
 
 Examples: 
-  mlab-speed-test
-  mlab-speed-test --json
+  mlab-speed-test -a -p
+  mlab-speed-test -a -p --json
 
 Options:
-  -j, --json  Output data in json format (default: false)
-  -h, --help  display help for command
+  -p, --accept-privacy-policy  Accept M-Lab's Privacy Policy (https://www.measurementlab.net/privacy/) (default: false)
+  -a, --autostart              Run speed test on command start. Requires --accept-privacy-policy (default: false)
+  --json                       Output data in json format (default: false)
+  --pretty                     If json should be pretty formatted (default: false)
+  -h, --help                   display help for command
 ```
 
 ## CLI Usage Example
@@ -63,42 +77,56 @@ Options:
 #### Example 1
 
 ```bash
-mlab-speed-test
+mlab-speed-test -a -p
 ```
 
 Example output:
 
 ```bash
 
-    Test Server: 🖥 Milan, IT
-    55.65 Mb/s ↓ / 16.82 Mb/s ↑
-    Latency: 32 ms
-    Loss: 4.09%
-    
+    M-Lab's Speed Test
+
+    ⊠ Privacy Policy ( https://www.measurementlab.net/privacy/ )
+
+    Test Server: 🖥  Milan, IT
+  ⠸ 65.98 Mb/s ↓ / 17.04 Mb/s ↑
+    Latency: 26 ms
+    Loss: 1.81%
+
+    Restart (enter) - Stop (delete)
+    Decline Privacy Policy (a) - Quit (ctrl + q)
+
 ```
 
 #### Example 2
 
 ```bash
-mlab-speed-test --json
+mlab-speed-test -ap --json --pretty
 ```
 
 Example output:
 
 ```json
 {
-  "isDone": false,
-  "downloadSpeed": "54.97",
-  "downloadUnit": "Mb/s",
-  "downloadCompleted": false,
-  "downloadProgress": 0.9007999999999999,
-  "uploadSpeed": "0",
-  "uploadUnit": "Mb/s",
-  "uploadCompleted": false,
-  "uploadProgress": 0,
-  "latencyUnit": "ms",
-  "lossUnit": "%",
-  "testServer": "Milan, IT"
+   "privacyPolicyAccepted": true,
+   "running": true,
+   "isDone": false,
+   "downloadSpeed": "64.80",
+   "downloadUnit": "Mb/s",
+   "downloadCompleted": true,
+   "downloadProgress": 1,
+   "uploadSpeed": "16.97",
+   "uploadUnit": "Mb/s",
+   "uploadCompleted": false,
+   "uploadProgress": 0.6515323619008064,
+   "latencyUnit": "ms",
+   "lossUnit": "%",
+   "location": {
+      "city": "Milan",
+      "country": "IT"
+   },
+   "latency": "51",
+   "loss": "6.57"
 }
 ```
 

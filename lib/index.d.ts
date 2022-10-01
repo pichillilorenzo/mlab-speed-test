@@ -1,5 +1,8 @@
 /// <reference types="node" />
 import EventEmitter from "events";
+export interface MLabSpeedTestServerDiscovery {
+    loadbalancer: URL;
+}
 export interface MLabSpeedTestServerInfo {
     machine: string;
     location: {
@@ -100,12 +103,12 @@ export interface MLabSpeedTestMeasurementServer {
     };
 }
 export interface MLabSpeedTestComplete {
-    LastClientMeasurement: {
+    LastClientMeasurement?: {
         ElapsedTime: number;
         NumBytes: number;
         MeanClientMbps: number;
     };
-    LastServerMeasurement: {
+    LastServerMeasurement?: {
         ConnectionInfo: MLabSpeedTestConnectionInfo;
         BBRInfo: MLabSpeedTestBBRInfo;
         TCPInfo: MLabSpeedTestTCPInfo;
@@ -116,6 +119,7 @@ export interface MLabSpeedTestUploadStart {
     ExpectedEndTime: number;
 }
 export declare interface MLabSpeedTest {
+    on(event: 'server-discovery', listener: (data: MLabSpeedTestServerDiscovery) => void): this;
     on(event: 'server-chosen', listener: (serverInfo: MLabSpeedTestServerInfo) => void): this;
     on(event: 'download-start', listener: (data: MLabSpeedTestDownloadStart) => void): this;
     on(event: 'download-measurement', listener: (data: MLabSpeedTestMeasurement) => void): this;
@@ -123,15 +127,28 @@ export declare interface MLabSpeedTest {
     on(event: 'upload-start', listener: (data: MLabSpeedTestUploadStart) => void): this;
     on(event: 'upload-measurement', listener: (data: MLabSpeedTestMeasurement) => void): this;
     on(event: 'upload-complete', listener: (data: MLabSpeedTestComplete) => void): this;
-    on(event: 'complete', listener: () => void): this;
+    on(event: 'complete', listener: (exitCode: number) => void): this;
+    on(event: 'error', listener: (err: Error) => void): this;
 }
+/**
+ * M-Lab's Speed Test command.
+ */
 export declare class MLabSpeedTest extends EventEmitter {
-    private browser?;
     private _running;
+    private _worker?;
     constructor();
+    /**
+     * Checks if M-Lab's Speed Test is running.
+     */
     get running(): boolean;
-    init(): Promise<void>;
-    run: () => Promise<void>;
+    /**
+     * Starts the M-Lab's Speed Test.
+     *
+     * @return {number} Zero on success, non-zero error code on failure and `undefined` if the speed test is already running.
+     */
+    run(): Promise<number | undefined>;
+    /**
+     * Stops the M-Lab's Speed Test.
+     */
     stop(): Promise<void>;
-    close(): Promise<void>;
 }
