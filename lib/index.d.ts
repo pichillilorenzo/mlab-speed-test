@@ -127,7 +127,7 @@ export declare interface MLabSpeedTest {
     on(event: 'upload-start', listener: (data: MLabSpeedTestUploadStart) => void): this;
     on(event: 'upload-measurement', listener: (data: MLabSpeedTestMeasurement) => void): this;
     on(event: 'upload-complete', listener: (data: MLabSpeedTestComplete) => void): this;
-    on(event: 'complete', listener: (exitCode: number) => void): this;
+    on(event: 'complete', listener: (exitCode?: number) => void): this;
     on(event: 'error', listener: (err: Error) => void): this;
 }
 /**
@@ -144,7 +144,7 @@ export declare class MLabSpeedTest extends EventEmitter {
     /**
      * Starts the M-Lab's Speed Test.
      *
-     * @return {number} Zero on success, non-zero error code on failure and `undefined` if the speed test is already running.
+     * @return {number} Zero on success, non-zero error code on failure or `undefined` if the speed test is already running.
      */
     run(): Promise<number | undefined>;
     /**

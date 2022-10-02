@@ -150,7 +150,7 @@ export declare interface MLabSpeedTest {
 
   on(event: 'upload-complete', listener: (data: MLabSpeedTestComplete) => void): this;
 
-  on(event: 'complete', listener: (exitCode: number) => void): this;
+  on(event: 'complete', listener: (exitCode?: number) => void): this;
 
   on(event: 'error', listener: (err: Error) => void): this;
 }
@@ -176,7 +176,7 @@ export class MLabSpeedTest extends EventEmitter {
   /**
    * Starts the M-Lab's Speed Test.
    *
-   * @return {number} Zero on success, non-zero error code on failure and `undefined` if the speed test is already running.
+   * @return {number} Zero on success, non-zero error code on failure or `undefined` if the speed test is already running.
    */
   async run(): Promise<number | undefined> {
     if (this._running) return;
@@ -184,7 +184,9 @@ export class MLabSpeedTest extends EventEmitter {
 
     // Because ndt7.test() returns a Promise<number> and it cannot be stopped,
     // I wrap it in a Worker, so it could be stopped using the '.terminate()' Worker method.
-    this._worker = new Worker(path.join(__dirname, 'worker.js'));
+    this._worker = new Worker(
+      __dirname.endsWith('src') ? path.join(__dirname, '..', 'lib', 'worker.js') : path.join(__dirname, 'worker.js')
+    );
     return new Promise<number | undefined>((resolve, _) => {
       this._worker?.on('message', (values: [string, ...any]) => {
         const event = values[0];
@@ -194,6 +196,14 @@ export class MLabSpeedTest extends EventEmitter {
           resolve(values[1] as number);
           return;
         }
+      });
+      this._worker?.on('error', (err: Error) => {
+        this.emit('error', err);
+      });
+      this._worker?.on('exit', (code?: number) => {
+        this.emit('complete', code);
+        this._running = false;
+        resolve(code);
       });
     });
   }

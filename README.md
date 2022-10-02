@@ -82,7 +82,7 @@ mlab-speed-test -a -p
 
 Example output:
 
-```bash
+```
 
     M-Lab's Speed Test
 
