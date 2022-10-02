@@ -20,7 +20,6 @@ export interface MLabSpeedTestCommandOptions {
 }
 
 async function runSpeedTest() {
-  // @ts-ignore
   const options: MLabSpeedTestCommandOptions = {
     ...program.opts()
   };
