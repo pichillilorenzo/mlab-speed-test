@@ -39,7 +39,9 @@
     "check",
     "mbps",
     "mlab",
-    "mlab-speed-test"
+    "m-lab",
+    "mlab-speed-test",
+    "ndt7"
   ],
   "main": "lib/index.js",
   "bin": {
